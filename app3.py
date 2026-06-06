@@ -82,21 +82,26 @@ test_cases = [
 
 def run_test(question, expected):
 
-    # # Retrieve Documents
-    # retrieved_docs = retriever.invoke(question)
+    # --------------------------------------------------------
+    # Retrieve Documents
+    # --------------------------------------------------------
 
-    # context = "\n".join(
-    #     doc.page_content
-    #     for doc in retrieved_docs
-    # )
-        # Retrieve Documents
     retrieved_docs = retriever.invoke(question)
 
-    contexts = [doc.page_content for doc in retrieved_docs]  # ← add this
+    context = "\n".join(
+        doc.page_content
+        for doc in retrieved_docs
+    )
 
-    context = "\n".join(contexts)  # ← use contexts list instead of rebuilding
+    contexts = [
+        doc.page_content
+        for doc in retrieved_docs
+    ]
 
-    # Build Prompt
+    # --------------------------------------------------------
+    # Prompt
+    # --------------------------------------------------------
+
     prompt = f"""
 You are an HR assistant.
 
@@ -116,7 +121,10 @@ Question:
 Answer:
 """
 
-    # Measure Latency
+    # --------------------------------------------------------
+    # LLM Call + Latency
+    # --------------------------------------------------------
+
     start_time = time.time()
 
     response = llm.invoke(prompt)
@@ -128,30 +136,32 @@ Answer:
 
     answer = response.content.strip()
 
-    # ========================================================
-    # DeepEval Evaluation
-    # ========================================================
+    # --------------------------------------------------------
+    # DeepEval
+    # --------------------------------------------------------
 
     eval_result = evaluate_response(
         question=question,
         answer=answer,
         expected=expected,
-        contexts=contexts       # ← pass it here
+        contexts=contexts
     )
 
-    # score = eval_result["score"]
-    # passed = eval_result["passed"]
-    # reason = eval_result["reason"]
+    overall_score = eval_result["overall_score"]
+    overall_pass = eval_result["overall_pass"]
 
-    score = eval_result["overall_score"]    # was "score"
-    passed = eval_result["overall_pass"]    # was "passed"
-    reason = str(eval_result["metrics"])    # per-metric breakdown as string
+    metrics = eval_result["metrics"]
 
-    # ========================================================
-    # Output
-    # ========================================================
+    answer_relevancy = metrics["AnswerRelevancyMetric"]
+    faithfulness = metrics["FaithfulnessMetric"]
+    contextual_precision = metrics["ContextualPrecisionMetric"]
+    contextual_recall = metrics["ContextualRecallMetric"]
 
-    print("\n" + "=" * 60)
+    # --------------------------------------------------------
+    # Console Output
+    # --------------------------------------------------------
+
+    print("\n" + "=" * 80)
 
     print("Question :", question)
     print("Expected :", expected)
@@ -159,33 +169,95 @@ Answer:
 
     print("Latency  :", latency, "seconds")
 
-    print("\nDeepEval")
-    print("Score    :", score)
-    print("Passed   :", passed)
-    print("Reason   :", reason)
+    print("\nDeepEval Metrics")
+    print("-" * 40)
+
+    for metric_name, metric_data in metrics.items():
+
+        print(f"\n{metric_name}")
+        print("Score  :", round(metric_data["score"], 3))
+        print("Passed :", metric_data["passed"])
+        print("Reason :", metric_data["reason"])
+
+    print("\nOverall Score :", overall_score)
+    print("Overall Pass  :", overall_pass)
 
     print(
-        "Result   :",
-        "PASS" if passed else "FAIL"
+        "\nResult :",
+        "PASS" if overall_pass else "FAIL"
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # Langfuse Logging
-    # ========================================================
+    # --------------------------------------------------------
 
     try:
+
+        # Event metadata
         langfuse.create_event(
-            name="evaluation",
+            name="rag_evaluation",
             metadata={
                 "question": question,
                 "expected": expected,
                 "actual": answer,
-                "passed": passed,
-                "deepeval_score": score,
-                "deepeval_reason": reason,
-                "latency_seconds": latency
+                "latency_seconds": latency,
+
+                "overall_score": overall_score,
+                "overall_pass": overall_pass,
+
+                "answer_relevancy_score":
+                    answer_relevancy["score"],
+                "answer_relevancy_reason":
+                    answer_relevancy["reason"],
+
+                "faithfulness_score":
+                    faithfulness["score"],
+                "faithfulness_reason":
+                    faithfulness["reason"],
+
+                "contextual_precision_score":
+                    contextual_precision["score"],
+                "contextual_precision_reason":
+                    contextual_precision["reason"],
+
+                "contextual_recall_score":
+                    contextual_recall["score"],
+                "contextual_recall_reason":
+                    contextual_recall["reason"]
             }
         )
+
+        # Optional: Langfuse Scores
+        try:
+
+            langfuse.create_score(
+                name="answer_relevancy",
+                value=answer_relevancy["score"]
+            )
+
+            langfuse.create_score(
+                name="faithfulness",
+                value=faithfulness["score"]
+            )
+
+            langfuse.create_score(
+                name="contextual_precision",
+                value=contextual_precision["score"]
+            )
+
+            langfuse.create_score(
+                name="contextual_recall",
+                value=contextual_recall["score"]
+            )
+
+            langfuse.create_score(
+                name="overall_score",
+                value=overall_score
+            )
+
+        except Exception:
+            pass
+
     except Exception as e:
         print(f"Langfuse logging warning: {e}")
 
@@ -193,11 +265,12 @@ Answer:
         "question": question,
         "expected": expected,
         "actual": answer,
-        "passed": passed,
-        "score": score,
-        "reason": reason,
-        "latency": latency
+        "latency": latency,
+        "overall_score": overall_score,
+        "overall_pass": overall_pass,
+        "metrics": metrics
     }
+
 
 # ============================================================
 # Evaluation Suite
@@ -233,22 +306,22 @@ with langfuse.start_as_current_observation(
 passed_count = sum(
     1
     for r in results
-    if r["passed"]
+    if r["overall_pass"]
 )
 
 total_count = len(results)
 
 avg_score = round(
     sum(
-        r["score"]
+        r["overall_score"]
         for r in results
     ) / total_count,
     3
 )
 
-print("\n" + "=" * 60)
+print("\n" + "=" * 80)
 print("EVALUATION SUMMARY")
-print("=" * 60)
+print("=" * 80)
 
 print(
     f"Passed: {passed_count}/{total_count}"
@@ -259,7 +332,7 @@ print(
 )
 
 print(
-    f"Average DeepEval Score: {avg_score}"
+    f"Average Score: {avg_score}"
 )
 
 # ============================================================
@@ -269,4 +342,6 @@ print(
 try:
     langfuse.flush()
 except Exception as e:
-    print(f"Langfuse flush warning: {e}")
+    print(
+        f"Langfuse flush warning: {e}"
+    )
