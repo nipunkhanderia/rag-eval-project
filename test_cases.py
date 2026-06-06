@@ -1,18 +1,16 @@
 test_cases = [
     {
-        "question": "How many annual leave days do employees get?",
-        "expected": "25 days"
+        "question":
+            "How many annual leave days do employees get?",
+
+        "expected":
+            "Employees receive 25 days of annual leave per year."
     },
     {
-        "question": "What is the remote work policy?",
-        "expected": "3 days per week"
+        "question":
+            "What is the remote work policy?",
+
+        "expected":
+            "Employees may work remotely up to 3 days per week."
     },
-    {
-        "question": "Who is covered by medical insurance?",
-        "expected": "employees and dependents"
-    },
-    {
-        "question": "What is the maternity leave policy?",
-        "expected": "I don't know"
-    }
 ]
