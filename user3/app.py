@@ -58,7 +58,7 @@ class Groq_API(DeepEvalBaseLLM):
     
    def generate(self, prompt):
         response = self.client.chat.completions.create(
-           model="llama-3.3-70b-versatile",messages=[{"role":"user", "content":"prompt"}]
+           model="llama-3.3-70b-versatile",messages=[{"role":"user", "content":prompt}]
        )
         return response.choices[0].message.content
    
@@ -75,6 +75,7 @@ groq = Groq_API()
 test = LLMTestCase(actual_output="response", expected_output="238 days", input = prompt, context=content)
 metric = AnswerRelevancyMetric(threshold=0.5, model = groq)
 print(metric.measure(test))
+print(metric.is_successful())
 
     
 
