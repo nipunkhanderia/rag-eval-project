@@ -47,3 +47,32 @@ print(response.content)
 
 
 
+from deepeval.test_case import LLMTestCase
+from deepeval.models import DeepEvalBaseLLM
+from groq import Groq
+
+class Groq_API(DeepEvalBaseLLM):
+   def __init__(self):
+        self.client() = Groq
+    
+   def generate(self, prompt):
+        response = self.client.chat.completions.create(
+           model="llama-3.3-70b-versatile",messages=[{"role":"user", "content":"prompt"}]
+       )
+        return response.choices[0].message.content
+   
+   async def a_generate(self, prompt):
+        return self.generate(prompt)
+   
+   def get_model_name(self):
+       return "groq/llama-3.3-70b-versatile"
+   def load_model(self):
+       return self.client
+    
+   
+
+
+
+
+
+
